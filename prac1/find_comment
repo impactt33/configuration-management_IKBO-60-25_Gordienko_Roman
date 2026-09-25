@@ -1,0 +1,34 @@
+#!/bin/bash
+
+file="$1"
+mask_symb=""
+
+case "$file" in
+  *.c)
+    mask_symb="//|/*"
+    ;;
+  *.js)
+    mask_symb="//|/*"
+    ;;
+  *.py)
+    mask_symb="#"
+    ;;
+  *)
+    echo "File is not supported."
+    exit 1
+    ;;
+esac
+
+if [ ! -f "$file" ]; then
+  echo "This is not a file."
+  exit 1
+fi
+
+first_string=$(head -n 1 "$file" | grep -o "^[${mask_symb}][ a-zA-Z0-9]*")
+
+if [ -z "$first_string" ]; then
+  echo "There is no comment in the start."
+else
+  echo "There is comment in the start."
+  echo "$first_string"
+fi
