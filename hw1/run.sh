@@ -1,4 +1,3 @@
 #!/bin/bash
 
-cd "$(dirname "$0")" || exit
-python3 src/main.py "$@"
+python3 "$(dirname "$0")/src/main.py" "$@"
