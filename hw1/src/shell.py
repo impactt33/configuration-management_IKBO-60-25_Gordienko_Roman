@@ -1,14 +1,9 @@
 """Разбор и выполнение команд эмулятора оболочки."""
 
+from errors import ExitRequest, TooManyArguments, UnclosedQuote, UnknownCommand
+from logger import XmlLogger
+
 QUOTES = "\"'"
-
-
-class ParseError(Exception):
-    """Ошибка парсера: невалидная строка."""
-
-
-class ExitRequest(Exception):
-    """Просьба завершить приложение."""
 
 
 def parse_command(command: str) -> list[str]:
@@ -42,7 +37,7 @@ def parse_command(command: str) -> list[str]:
             current_argument += symbol
 
     if quote_state is not None:
-        raise ParseError(f"Unclosed quote: {quote_state}")
+        raise UnclosedQuote(quote_state)
 
     if current_argument:
         command_with_args.append(current_argument)
@@ -63,7 +58,7 @@ def cmd_cd(args: list[str]) -> str:
 def cmd_exit(args: list[str]) -> str:
     """Бросает исключение, которое будет обработано GUI."""
     if args:
-        return "exit: too many arguments."
+        raise TooManyArguments("exit")
 
     raise ExitRequest()
 
@@ -75,19 +70,22 @@ COMMANDS = {
 }
 
 
-def execute(line: str) -> str:
-    """Выполняет введённую строку и возвращает текст для вывода."""
-    try:
-        command_line = parse_command(line)
-    except ParseError as e:
-        return str(e)
+def execute(line: str, logger: XmlLogger | None = None) -> str:
+    """Выполняет введённую строку и возвращает текст для вывода.
+
+    Если передан logger, вызов команды записывается в лог.
+    """
+    command_line = parse_command(line)
 
     if not command_line:
         return ""
 
+    if logger is not None:
+        logger.log(command_line[0], command_line[1:])
+
     command = COMMANDS.get(command_line[0])
 
     if command is None:
-        return f"Command {command_line[0]} not found."
+        raise UnknownCommand(command_line[0])
 
     return command(command_line[1:])

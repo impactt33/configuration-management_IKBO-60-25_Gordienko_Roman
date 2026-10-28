@@ -2,7 +2,10 @@
 
 import unittest
 
-from shell import ExitRequest, ParseError, execute, parse_command
+from errors import (
+    ExitRequest, ParseError, TooManyArguments, UnclosedQuote, UnknownCommand,
+)
+from shell import execute, parse_command
 
 
 class TestParseCommand(unittest.TestCase):
@@ -55,25 +58,94 @@ class TestExecute(unittest.TestCase):
         self.assertEqual(execute("ls -l /home"), "ls: ['-l', '/home']")
 
     def test_unknown_command(self):
-        """Неизвестная команда выдаёт сообщение об ошибке."""
-        self.assertEqual(execute("ld -l /home"), "Command ld not found.")
+        """Неизвестная команда бросает UnknownCommand."""
+        with self.assertRaises(UnknownCommand):
+            execute("ld -l /home")
 
     def test_empty_line(self):
         """Пустой ввод ничего не выводит."""
         self.assertEqual(execute(""), "")
 
     def test_unclosed_quote(self):
-        """Ошибка парсера возвращается как сообщение."""
-        self.assertEqual(execute('ld -l "/home'), 'Unclosed quote: "')
+        """Ошибка парсера пробрасывается из execute наружу."""
+        with self.assertRaises(UnclosedQuote):
+            execute('ld -l "/home')
 
     def test_exit_with_parameters(self):
-        """Команда exit с аргументами выдаёт ошибку."""
-        self.assertEqual(execute("exit 5"), "exit: too many arguments.")
+        """Команда exit с аргументами бросает TooManyArguments."""
+        with self.assertRaises(TooManyArguments):
+            execute("exit 5")
 
     def test_exit(self):
         """Команда exit бросает ExitRequest."""
         with self.assertRaises(ExitRequest):
             execute("exit")
+
+
+class TestErrorMessages(unittest.TestCase):
+    """Тексты ошибок, которые видит пользователь."""
+
+    def test_unknown_command_message(self):
+        """Сообщение о неизвестной команде содержит её имя."""
+        self.assertEqual(str(UnknownCommand("foo")), "foo: unknown command.")
+
+    def test_too_many_arguments_message(self):
+        """Сообщение о лишних аргументах содержит имя команды."""
+        self.assertEqual(
+            str(TooManyArguments("exit")), "exit: too many arguments.",
+        )
+
+    def test_unclosed_quote_message(self):
+        """Сообщение о незакрытой кавычке содержит саму кавычку."""
+        self.assertEqual(str(UnclosedQuote('"')), 'Unclosed quote: "')
+
+
+class FakeLogger:
+    """Подмена XmlLogger: запоминает события вместо записи в файл."""
+
+    def __init__(self):
+        """Создаёт пустой список событий."""
+        self.events = []
+
+    def log(self, command, arguments):
+        """Запоминает событие вызова команды."""
+        self.events.append((command, arguments))
+
+
+class TestExecuteLogging(unittest.TestCase):
+    """Тесты записи вызовов команд в лог."""
+
+    def setUp(self):
+        """Создаёт подменный логгер перед каждым тестом."""
+        self.logger = FakeLogger()
+
+    def test_command_is_logged(self):
+        """Вызов команды записывается с именем и аргументами."""
+        execute('cd "My Documents"', self.logger)
+        self.assertEqual(self.logger.events, [("cd", ["My Documents"])])
+
+    def test_unknown_command_is_logged(self):
+        """Попытка вызвать неизвестную команду тоже записывается."""
+        with self.assertRaises(UnknownCommand):
+            execute("foo bar", self.logger)
+        self.assertEqual(self.logger.events, [("foo", ["bar"])])
+
+    def test_exit_is_logged(self):
+        """Команда exit записывается до выхода."""
+        with self.assertRaises(ExitRequest):
+            execute("exit", self.logger)
+        self.assertEqual(self.logger.events, [("exit", [])])
+
+    def test_empty_line_is_not_logged(self):
+        """Пустая строка и комментарий не записываются."""
+        execute("   # comment", self.logger)
+        self.assertEqual(self.logger.events, [])
+
+    def test_parse_error_is_not_logged(self):
+        """Строка с ошибкой разбора не записывается."""
+        with self.assertRaises(UnclosedQuote):
+            execute('ls "abc', self.logger)
+        self.assertEqual(self.logger.events, [])
 
 
 if __name__ == "__main__":
