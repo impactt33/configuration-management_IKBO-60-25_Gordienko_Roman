@@ -18,7 +18,7 @@ XML-лог вызовов команд и умеет выполнять стар
 | 1. REPL | окно, парсер, заглушки `ls` и `cd`, команда `exit` | готов |
 | 2. Конфигурация | параметры командной строки, XML-лог, стартовый скрипт | готов |
 | 3. VFS | виртуальная файловая система из XML-файла | готов |
-| 4. Основные команды | `ls`, `cd`, `du`, `pwd`, `tree` | — |
+| 4. Основные команды | `ls`, `cd`, `du`, `pwd`, `tree` | реализована `cd` |
 | 5. Дополнительные команды | `rmdir`, `chmod` | — |
 
 ## Функции и настройки
@@ -56,7 +56,8 @@ main.py: error: argument --log: expected one argument
 
 - Заголовок: `Shell emulator - VFS: <имя>`. Имя берётся из `--vfs`, без
   параметра показывается `vfs not specified`.
-- Приглашение имеет вид `пользователь@хост:~$`.
+- Приглашение имеет вид `пользователь@хост:/текущий/путь$` и обновляется
+  после перехода в другой каталог, в том числе из стартового скрипта.
 - Введённая команда и её результат добавляются в поле вывода.
   Редактировать поле вывода нельзя.
 
@@ -65,8 +66,14 @@ main.py: error: argument --log: expected one argument
 | Команда | Описание |
 |---|---|
 | `ls [аргументы]` | заглушка: выводит имя команды и список аргументов |
-| `cd [аргументы]` | заглушка: выводит имя команды и список аргументов |
+| `cd PATH` | переходит в каталог VFS; поддерживает абсолютные и относительные пути, `.` и `..`, имена в кавычках |
 | `exit` | закрывает окно эмулятора, с аргументами выдаёт ошибку |
+| `clear` | очищает поле вывода, сохраняя текущий каталог и XML-лог; аргументы не принимает |
+
+`cd` принимает ровно один непустой путь и требует загруженную VFS.
+При успехе ничего не выводит. Переход выше корня оставляет пользователя
+в `/`. При ошибке текущий каталог не меняется, даже если часть пути
+уже была найдена. Реальная файловая система и исходный XML не изменяются.
 
 ### Виртуальная файловая система
 
@@ -90,8 +97,8 @@ main.py: error: argument --log: expected one argument
 
 В `vfs/` находятся три примера: `minimal.xml` с пустым корнем,
 `several_files.xml` с текстовыми и двоичным файлами и `deep.xml` с
-папками глубиной более трёх уровней. На этом этапе `ls` и `cd` остаются
-заглушками; работу с деревом будут выполнять команды следующего этапа.
+папками глубиной более трёх уровней. `cd` уже использует это дерево,
+а `ls` пока остаётся заглушкой.
 
 ### Разбор командной строки
 
@@ -123,9 +130,9 @@ main.py: error: argument --log: expected one argument
 
 ```
 # Без кавычек: два отдельных аргумента
-cd 123 123
+ls 123 123
 # В кавычках: один аргумент с пробелом
-cd "123 123"
+ls "123 123"
 ls -l 12 4 dv  # комментарий в конце строки отбрасывается
 ```
 
@@ -171,6 +178,11 @@ ls -l 12 4 dv  # комментарий в конце строки отбрас�
 | неизвестная команда | `<имя>: unknown command.` |
 | незакрытая кавычка | `Unclosed quote: "` |
 | `exit` с аргументами | `exit: too many arguments.` |
+| `clear` с аргументами | `clear: too many arguments.` |
+| `cd` без пути / с лишними аргументами | `cd: missing arguments.` / `cd: too many arguments.` |
+| `cd` с пустым путём | `cd: empty path.` |
+| `cd` без загруженной VFS | `cd: VFS is not loaded.` |
+| путь `cd` не найден / содержит файл | `cd: <путь>: no such file or directory.` / `cd: <путь>: not a directory.` |
 | ошибка в стартовом скрипте | текст ошибки и `Script error at line N, execution stopped.` |
 | стартовый скрипт не читается | `Script error: cannot read <путь>` |
 | лог-файл повреждён или недоступен | `Log error: cannot use <путь>: <причина>`, эмулятор работает без лога |
@@ -191,6 +203,7 @@ hw1/
 │   └── errors.py       исключения
 ├── tests/
 │   ├── test_shell.py   тесты разбора, выполнения и логирования команд
+│   ├── test_gui.py     обновление приглашения при выполнении cd
 │   ├── test_logger.py  тесты XML-лога
 │   ├── test_main.py    тесты разбора параметров
 │   └── test_vfs.py     тесты загрузки VFS
@@ -204,21 +217,24 @@ hw1/
 |---|---|---|
 | `parse_args(argv)` | `main.py` | разбирает параметры командной строки |
 | `parse_command(command)` | `shell.py` | разбивает строку на имя команды и аргументы |
-| `execute(line, logger)` | `shell.py` | выполняет строку и возвращает текст для вывода, пишет вызов в лог |
-| `cmd_ls`, `cmd_cd`, `cmd_exit` | `shell.py` | реализация команд, словарь `COMMANDS` связывает их с именами |
+| `Shell` | `shell.py` | хранит VFS, текущий каталог и логгер; `current_path` возвращает абсолютный путь |
+| `Shell.execute(line)` | `shell.py` | выполняет строку и возвращает текст для вывода, пишет вызов в лог |
+| `Shell.cmd_ls`, `Shell.cmd_cd`, `Shell.cmd_exit` | `shell.py` | методы команд, выбираемые в `execute` |
 | `XmlLogger` | `logger.py` | XML-лог: метод `log(command, arguments)` добавляет событие |
 | `ShellWindow` | `gui.py` | окно: `run_line` выполняет введённую строку, `run_script` выполняет стартовый скрипт |
 | `ShellError` | `errors.py` | общий родитель ошибок, о которых сообщается пользователю |
 | `ParseError`, `UnclosedQuote` | `errors.py` | ошибки разбора командной строки |
 | `CommandError`, `UnknownCommand`, `TooManyArguments` | `errors.py` | ошибки выполнения команд |
 | `ExitRequest` | `errors.py` | сигнал, которым `exit` просит закрыть окно |
+| `ClearRequest` | `errors.py` | сигнал, которым `clear` просит GUI очистить вывод; стартовый скрипт продолжает выполняться |
 | `VFS`, `Directory`, `File` | `vfs_reader.py` | дерево VFS, папка и файл в памяти |
 | `get_vfs(path)` | `vfs_reader.py` | загружает XML-файл в VFS |
 | `read_directory(element)` | `vfs_reader.py` | рекурсивно загружает вложенные папки и файлы |
 | `VfsNotFound`, `InvalidVfs` | `errors.py` | ошибки отсутствующего файла и корневой папки VFS |
 
-Логика команд не зависит от tkinter, а логгер передаётся в `execute`
-снаружи. Поэтому команды тестируются без окна и без записи файлов.
+Логика команд не зависит от tkinter, а логгер передаётся в `Shell`
+снаружи. `ShellWindow` вызывает `Shell.execute`, затем обновляет приглашение
+по `Shell.current_path`. Команды тестируются без окна и без записи файлов.
 
 ## Сборка, запуск и тесты
 
@@ -234,6 +250,7 @@ hw1/
 ./scripts/test_vfs.sh                     # минимальная VFS и ошибки загрузки
 ./scripts/test_vfs_files.sh               # VFS с несколькими файлами
 ./scripts/test_vfs_deep.sh                # VFS с вложенными папками
+./run.sh --vfs vfs/deep.xml --script scripts/cd_demo.txt  # переходы cd и ошибка
 ```
 
 Модульные тесты написаны на `unittest`. Без скрипта их можно запустить
@@ -262,31 +279,30 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 Стартовые скрипты эмулятора для них: `scripts/no_errors.txt`,
 `scripts/with_errors.txt`, `scripts/with_exit.txt` и
 `scripts/stage3_demo.txt`. Последний показывает команды и ошибку `exit 1`
-после загрузки VFS. Логи складываются в `logs/`, эта папка не попадает в
+после загрузки VFS. `scripts/cd_demo.txt` демонстрирует навигацию в `deep.xml`
+и ошибку перехода в файл. Логи складываются в `logs/`, эта папка не попадает в
 репозиторий.
 
 ## Примеры использования
 
-Сеанс работы в окне эмулятора:
+Сеанс работы в окне эмулятора с `--vfs vfs/deep.xml`:
 
 ```
-user@host:~$ ls -l /home
+user@host:/$ ls -l /home
 ls: ['-l', '/home']
-user@host:~$ cd "My Documents"
-cd: ['My Documents']
-user@host:~$ cd 'it is' "it's"
-cd: ['it is', "it's"]
-user@host:~$ cd "a b"c
-cd: ['a bc']
-user@host:~$ ls /etc  # comment
-ls: ['/etc']
-user@host:~$ pwd
+user@host:/$ cd /home/student
+user@host:/home/student$ cd project/src
+user@host:/home/student/project/src$ cd ../docs
+user@host:/home/student/project/docs$ cd /missing
+cd: /missing: no such file or directory.
+user@host:/home/student/project/docs$ cd /
+user@host:/$ pwd
 pwd: unknown command.
-user@host:~$ cd "unclosed
+user@host:/$ cd "unclosed
 Unclosed quote: "
-user@host:~$ exit 1
+user@host:/$ exit 1
 exit: too many arguments.
-user@host:~$ exit
+user@host:/$ exit
 ```
 
 После `exit` окно закрывается.
@@ -297,15 +313,15 @@ user@host:~$ exit
 vfs: None
 log: None
 script: scripts/with_errors.txt
-user@host:~$ # Стартовый скрипт с ошибкой: выполнение остановится на неизвестной команде.
-user@host:~$ cd 123 123
-cd: ['123', '123']
-user@host:~$ cd "123 123"
-cd: ['123 123']
-user@host:~$ ls -l 12 4 dv
+user@host:/$ # Стартовый скрипт с ошибкой: выполнение остановится на неизвестной команде.
+user@host:/$ ls 123 123
+ls: ['123', '123']
+user@host:/$ ls "123 123"
+ls: ['123 123']
+user@host:/$ ls -l 12 4 dv
 ls: ['-l', '12', '4', 'dv']
-user@host:~$ # Неизвестная команда: здесь скрипт остановится
-user@host:~$ cf
+user@host:/$ # Неизвестная команда: здесь скрипт остановится
+user@host:/$ cf
 cf: unknown command.
 Script error at line 7, execution stopped.
 ```

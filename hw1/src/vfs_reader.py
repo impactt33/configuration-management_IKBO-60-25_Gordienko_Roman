@@ -6,6 +6,7 @@ import base64
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
+from random import paretovariate
 
 from errors import InvalidVfs, VfsNotFound
 
@@ -23,6 +24,7 @@ class Directory:
     """Папка VFS с вложенными папками и файлами."""
 
     name: str
+    parent: Directory | None
     directories: list[Directory]
     files: list[File]
 
@@ -32,22 +34,24 @@ class File:
     """Файл VFS: текст или декодированные двоичные данные."""
 
     name: str
+    parent: Directory
     encoding: str
     content: str | bytes
 
 
-def read_directory(element: ET.Element) -> Directory:
+def read_directory(element: ET.Element, parent: Directory | None = None) -> Directory:
     """Рекурсивно преобразует XML-папку в дерево объектов."""
 
-    directory = Directory(
+    curr_directory = Directory(
         name=element.attrib["name"],
         directories=[],
+        parent=parent,
         files=[]
     )
 
     for child in element:
         if child.tag == "directory":
-            directory.directories.append(read_directory(child))
+            curr_directory.directories.append(read_directory(child, curr_directory))
         elif child.tag == "file":
             name = child.attrib["name"]
             encoding = child.attrib["encoding"]
@@ -56,13 +60,14 @@ def read_directory(element: ET.Element) -> Directory:
             else:
                 content = child.text or ""
 
-            directory.files.append(File(
+            curr_directory.files.append(File(
                 name=name,
+                parent=curr_directory,
                 encoding=encoding,
                 content=content
             ))
 
-    return directory
+    return curr_directory
 
 
 def get_vfs(path: str) -> VFS:

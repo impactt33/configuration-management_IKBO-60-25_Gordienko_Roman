@@ -1,0 +1,14 @@
+# Запуск: ./run.sh --vfs vfs/deep.xml --script scripts/cd_demo.txt
+# После каждой команды текущий путь обновляется в приглашении.
+
+cd /home/student
+cd project/src
+cd ../docs
+cd ./../src/.
+cd /
+cd ../../..
+cd //home///student/
+cd "project/docs"
+
+# Ошибка не меняет текущий каталог и останавливает скрипт.
+cd /home/student/notes.txt
