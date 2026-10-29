@@ -8,7 +8,9 @@ from pathlib import Path
 from errors import ExitRequest, ShellError
 from logger import XmlLogger
 from shell import execute
+from vfs_reader import VFS
 
+NO_VFS_NAME = "vfs not specified"
 WINDOW_SIZE = "800x500"
 FONT = ("monospace", 22)
 BACKGROUND = "black"
@@ -18,12 +20,16 @@ FOREGROUND = "white"
 class ShellWindow:
     """Окно эмулятора: поле вывода и строка ввода команд."""
 
-    def __init__(self, vfs_name: str, logger: XmlLogger | None = None) -> None:
+    def __init__(
+        self, vfs: VFS | None, logger: XmlLogger | None = None
+    ) -> None:
         """Создаёт окно, имя VFS показывается в заголовке.
 
         Если передан logger, выполненные команды записываются в лог.
         """
+        self.vfs = vfs
         self.root = tk.Tk()
+        vfs_name = vfs.name if vfs is not None else NO_VFS_NAME
         self.root.title(f"Shell emulator - VFS: {vfs_name}")
         self.root.geometry(WINDOW_SIZE)
         self.prompt = f"{getpass.getuser()}@{socket.gethostname()}:~$ "
