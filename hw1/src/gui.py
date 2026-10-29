@@ -5,9 +5,9 @@ import socket
 import tkinter as tk
 from pathlib import Path
 
-from errors import ExitRequest, ShellError
+from errors import ClearRequest, ExitRequest, ShellError
 from logger import XmlLogger
-from shell import execute
+from shell import Shell
 from vfs_reader import VFS
 
 NO_VFS_NAME = "vfs not specified"
@@ -27,15 +27,16 @@ class ShellWindow:
 
         Если передан logger, выполненные команды записываются в лог.
         """
-        self.vfs = vfs
+        self.shell = Shell(vfs, logger)
         self.root = tk.Tk()
         vfs_name = vfs.name if vfs is not None else NO_VFS_NAME
         self.root.title(f"Shell emulator - VFS: {vfs_name}")
         self.root.geometry(WINDOW_SIZE)
-        self.prompt = f"{getpass.getuser()}@{socket.gethostname()}:~$ "
+        self.prompt = (
+            f"{getpass.getuser()}@{socket.gethostname()}:{self.shell.current_path}$ "
+        )
         self.output = self._build_output()
         self.entry = self._build_input()
-        self.logger = logger
 
     def _build_output(self) -> tk.Text:
         """Создаёт поле вывода с прокруткой, недоступное для ввода."""
@@ -55,11 +56,11 @@ class ShellWindow:
         """Создаёт строку ввода с приглашением и обработчиком Enter."""
         frame = tk.Frame(self.root, bg=BACKGROUND)
         frame.pack(fill=tk.X)
-        label = tk.Label(
+        self.prompt_label = tk.Label(
             frame, text=self.prompt, font=FONT,
             bg=BACKGROUND, fg=FOREGROUND,
         )
-        label.pack(side=tk.LEFT)
+        self.prompt_label.pack(side=tk.LEFT)
         entry = tk.Entry(
             frame, font=FONT, bg=BACKGROUND, fg=FOREGROUND,
             insertbackground=FOREGROUND, relief=tk.FLAT,
@@ -81,14 +82,27 @@ class ShellWindow:
         Ошибки не перехватываются: их обрабатывает вызывающий метод.
         """
         self.write(self.prompt + line)
-        result = execute(line, self.logger)
+        try:
+            result = self.shell.execute(line)
+        except ClearRequest:
+            self.clear_output()
+            result = ""
+        self.update_prompt()
         if result:
             self.write(result)
+
+    def update_prompt(self) -> None:
+        """Обновляет видимое приглашение по текущему пути шелла."""
+        self.prompt = (
+            f"{getpass.getuser()}@{socket.gethostname()}:{self.shell.current_path}$ "
+        )
+        self.prompt_label.config(text=self.prompt)
 
     def run_line(self, line: str) -> None:
         """Выполняет строку так, будто её ввёл пользователь."""
         try:
             self._run(line)
+            self.update_prompt()
         except ShellError as exc:
             self.write(str(exc))
         except ExitRequest:
@@ -118,6 +132,12 @@ class ShellWindow:
             except ExitRequest:
                 self.root.destroy()
                 return
+
+    def clear_output(self) -> None:
+        """Удаляет историю вывода, сохраняя приглашение и состояние шелла."""
+        self.output.config(state=tk.NORMAL)
+        self.output.delete("1.0", tk.END)
+        self.output.config(state=tk.DISABLED)
 
     def write(self, text: str) -> None:
         """Добавляет строку в поле вывода и прокручивает его вниз."""

@@ -28,6 +28,13 @@ class TooManyArguments(CommandError):
         """Формирует сообщение с именем команды."""
         super().__init__(f"{command}: too many arguments.")
 
+class MissingArguments(CommandError):
+    """Команде передано недостаточно аргументов."""
+
+    def __init__(self, command: str) -> None:
+        """Формирует сообщение с именем команды."""
+        super().__init__(f"{command}: missing arguments.")
+
 
 class UnknownCommand(CommandError):
     """Неизвестная команда."""
@@ -39,6 +46,10 @@ class UnknownCommand(CommandError):
 
 class ExitRequest(Exception):
     """Просьба завершить приложение. Это не ошибка."""
+
+
+class ClearRequest(Exception):
+    """Просьба очистить поле вывода. Это не ошибка."""
 
 
 class VfsNotFound(ParseError):
