@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vfs>
+  <directory name="/">
+    <file name="readme.txt" encoding="utf-8">Example VFS with several files.</file>
+    <file name="notes.txt" encoding="utf-8">These files exist only in the virtual filesystem.</file>
+    <file name="data.bin" encoding="base64">AAECA//+</file>
+    <directory name="docs">
+      <file name="guide.txt" encoding="utf-8">A file in the docs directory.</file>
+    </directory>
+  </directory>
+</vfs>

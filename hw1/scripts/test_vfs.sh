@@ -1,15 +1,14 @@
 #!/bin/bash
-# Проверка параметра --vfs: имя VFS в заголовке окна.
-# На этапе 2 файл VFS не читается, из пути берётся только имя.
-# Каждый вызов открывает окно, закройте его, чтобы перейти к следующему.
+# Проверка минимальной VFS и ошибок загрузки.
+# Каждый вызов открывает окно; закройте его для перехода к следующему.
 
 cd "$(dirname "$0")/.." || exit
 
-echo "1. Без --vfs: в заголовке имя по умолчанию myvfs"
-./run.sh
+echo "1. Пустая VFS: в заголовке имя minimal"
+./run.sh --vfs vfs/minimal.xml --script scripts/stage3_demo.txt
 
-echo "2. --vfs vfs/minimal.xml: в заголовке minimal"
-./run.sh --vfs vfs/minimal.xml
+echo "2. Несуществующий XML: в окне сообщение VFS error"
+./run.sh --vfs vfs/missing.xml
 
-echo "3. Вложенные папки в пути: в заголовке только имя файла deep"
-./run.sh --vfs vfs/levels/deep.xml
+echo "3. Неверный формат: в окне сообщение VFS error"
+./run.sh --vfs scripts/no_errors.txt

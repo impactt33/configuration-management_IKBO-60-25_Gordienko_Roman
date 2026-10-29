@@ -39,3 +39,19 @@ class UnknownCommand(CommandError):
 
 class ExitRequest(Exception):
     """Просьба завершить приложение. Это не ошибка."""
+
+
+class VfsNotFound(ParseError):
+    """VFS по указанному пути не найдена."""
+
+    def __init__(self, vfs_path: str) -> None:
+        """Формирует сообщение с путём к VFS."""
+        super().__init__(f"vfs by path {vfs_path} not found.")
+
+
+class InvalidVfs(ParseError):
+    """Невалидная VFS - отсутствует корневая папка."""
+
+    def __init__(self, vfs_path: str) -> None:
+        """Формирует сообщение с путём к VFS."""
+        super().__init__(f"vfs by path {vfs_path} invalid.")

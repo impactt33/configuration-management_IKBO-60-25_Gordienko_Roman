@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<vfs>
+  <directory name="/">
+    <file name="welcome.txt" encoding="utf-8">Welcome to the deep VFS example.</file>
+    <directory name="home">
+      <directory name="student">
+        <file name="notes.txt" encoding="utf-8">Files can be nested inside directories.</file>
+        <directory name="project">
+          <directory name="src">
+            <file name="main.py" encoding="utf-8">print(&quot;Hello from VFS&quot;)</file>
+          </directory>
+          <directory name="docs">
+            <file name="readme.txt" encoding="utf-8">Project documentation.</file>
+          </directory>
+        </directory>
+      </directory>
+    </directory>
+  </directory>
+</vfs>
