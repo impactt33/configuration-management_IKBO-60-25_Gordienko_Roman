@@ -65,9 +65,10 @@ class TestExecute(unittest.TestCase):
         """Создаёт шелл без загруженной VFS."""
         self.shell = Shell(None)
 
-    def test_simple_command(self):
-        """Заглушка ls выводит имя и аргументы."""
-        self.assertEqual(self.shell.execute("ls -l /home"), "ls: ['-l', '/home']")
+    def test_ls_without_vfs(self):
+        """Команда ls требует загруженную VFS."""
+        with self.assertRaisesRegex(CommandError, "VFS is not loaded"):
+            self.shell.execute("ls -l /home")
 
     def test_unknown_command(self):
         """Неизвестная команда бросает UnknownCommand."""
@@ -92,6 +93,44 @@ class TestExecute(unittest.TestCase):
         """Команда exit бросает ExitRequest."""
         with self.assertRaises(ExitRequest):
             self.shell.execute("exit")
+
+
+class TestLs(unittest.TestCase):
+    """Вывод содержимого текущей и указанной папки VFS."""
+
+    def setUp(self):
+        """Загружает VFS с файлами и вложенными папками."""
+        path = Path(__file__).resolve().parent.parent / "vfs" / "deep.xml"
+        self.shell = Shell(get_vfs(str(path)))
+
+    def test_current_directory(self):
+        """Без аргументов ls выводит содержимое текущей папки."""
+        self.assertEqual(self.shell.execute("ls"), "home welcome.txt")
+
+    def test_long_current_directory(self):
+        """ls -l без пути выводит элементы текущей папки по строкам."""
+        self.assertEqual(self.shell.execute("ls -l"), "home\nwelcome.txt")
+        self.shell.execute("cd /home/student")
+        self.assertEqual(self.shell.execute("ls -l"), "project\nnotes.txt")
+
+    def test_long_named_directory(self):
+        """Путь работает вместе с флагом -l в обоих порядках."""
+        expected = "project\nnotes.txt"
+        self.assertEqual(self.shell.execute("ls -l /home/student"), expected)
+        self.assertEqual(self.shell.execute("ls /home/student -l"), expected)
+
+    def test_named_directory_without_flag(self):
+        """Без флага имена разделяются пробелами."""
+        self.assertEqual(
+            self.shell.execute("ls /home/student"), "project notes.txt"
+        )
+
+    def test_argument_errors(self):
+        """Лишние пути и отсутствующая папка вызывают ошибки."""
+        with self.assertRaises(TooManyArguments):
+            self.shell.execute("ls /home /home/student")
+        with self.assertRaisesRegex(CommandError, "no such file"):
+            self.shell.execute("ls -l /missing")
 
 
 class TestCd(unittest.TestCase):

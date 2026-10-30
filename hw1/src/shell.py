@@ -108,31 +108,22 @@ class Shell:
         return directory
 
     def cmd_ls(self, args: list[str]) -> str:
-        """Заглушка ls: возвращает имя команды и аргументы."""
-
+        """Выводит содержимое текущего или указанного каталога VFS."""
         if self.vfs is None or self.current_directory is None:
             raise CommandError("ls: VFS is not loaded.")
 
-        answer = []
-        list_flag = False
+        long_format = "-l" in args
+        paths = [arg for arg in args if arg != "-l"]
+        if len(paths) > 1:
+            raise TooManyArguments("ls")
 
-        if len(args) == 0:
-            for directory in self.current_directory.directories:
-                answer.append(directory.name)
-            for file in self.current_directory.files:
-                answer.append(file.name)
-            return " ".join(answer)
-
-        if args[0] == "-l":
-            list_flag = True
-
-        directory = self.go_to_directory("ls", args[1] if list_flag else args[0])
-
-        for inner_directory in directory.directories:
-            answer.append(inner_directory.name)
-        for file in directory.files:
-            answer.append(file.name)
-        return " ".join(answer) if not list_flag else "\n".join(answer)
+        directory = (
+            self.go_to_directory("ls", paths[0])
+            if paths else self.current_directory
+        )
+        names = [child.name for child in directory.directories]
+        names.extend(file.name for file in directory.files)
+        return ("\n" if long_format else " ").join(names)
 
     def cmd_cd(self, args: list[str]) -> str:
         """Переходит по абсолютному или относительному пути внутри VFS."""

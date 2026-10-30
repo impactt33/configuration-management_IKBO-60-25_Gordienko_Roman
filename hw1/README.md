@@ -18,7 +18,7 @@ XML-лог вызовов команд и умеет выполнять стар
 | 1. REPL | окно, парсер, заглушки `ls` и `cd`, команда `exit` | готов |
 | 2. Конфигурация | параметры командной строки, XML-лог, стартовый скрипт | готов |
 | 3. VFS | виртуальная файловая система из XML-файла | готов |
-| 4. Основные команды | `ls`, `cd`, `du`, `pwd`, `tree` | реализована `cd` |
+| 4. Основные команды | `ls`, `cd`, `du`, `pwd`, `tree` | реализованы `ls`, `cd`, `pwd` |
 | 5. Дополнительные команды | `rmdir`, `chmod` | — |
 
 ## Функции и настройки
@@ -65,8 +65,9 @@ main.py: error: argument --log: expected one argument
 
 | Команда | Описание |
 |---|---|
-| `ls [аргументы]` | заглушка: выводит имя команды и список аргументов |
+| `ls [-l] [PATH]` | показывает файлы и папки текущего или указанного каталога VFS; с `-l` — по одному имени на строку |
 | `cd PATH` | переходит в каталог VFS; поддерживает абсолютные и относительные пути, `.` и `..`, имена в кавычках |
+| `pwd` | показывает абсолютный путь текущего каталога |
 | `exit` | закрывает окно эмулятора, с аргументами выдаёт ошибку |
 | `clear` | очищает поле вывода, сохраняя текущий каталог и XML-лог; аргументы не принимает |
 
@@ -74,6 +75,10 @@ main.py: error: argument --log: expected one argument
 При успехе ничего не выводит. Переход выше корня оставляет пользователя
 в `/`. При ошибке текущий каталог не меняется, даже если часть пути
 уже была найдена. Реальная файловая система и исходный XML не изменяются.
+
+`ls` требует загруженную VFS и принимает не более одного пути к каталогу.
+Флаг `-l` меняет разделитель имён с пробела на перевод строки. Метаданные
+файлов в текущем XML-формате не хранятся.
 
 ### Виртуальная файловая система
 
@@ -97,8 +102,7 @@ main.py: error: argument --log: expected one argument
 
 В `vfs/` находятся три примера: `minimal.xml` с пустым корнем,
 `several_files.xml` с текстовыми и двоичным файлами и `deep.xml` с
-папками глубиной более трёх уровней. `cd` уже использует это дерево,
-а `ls` пока остаётся заглушкой.
+папками глубиной более трёх уровней. `cd` и `ls` используют это дерево.
 
 ### Разбор командной строки
 
@@ -289,7 +293,7 @@ PYTHONPATH=src python3 -m unittest discover -s tests -v
 
 ```
 user@host:/$ ls -l /home
-ls: ['-l', '/home']
+student
 user@host:/$ cd /home/student
 user@host:/home/student$ cd project/src
 user@host:/home/student/project/src$ cd ../docs
@@ -297,7 +301,7 @@ user@host:/home/student/project/docs$ cd /missing
 cd: /missing: no such file or directory.
 user@host:/home/student/project/docs$ cd /
 user@host:/$ pwd
-pwd: unknown command.
+/
 user@host:/$ cd "unclosed
 Unclosed quote: "
 user@host:/$ exit 1
@@ -307,7 +311,8 @@ user@host:/$ exit
 
 После `exit` окно закрывается.
 
-Стартовый скрипт с ошибкой, `./run.sh --script scripts/with_errors.txt`:
+Стартовый скрипт с ошибкой, запущенный без VFS:
+`./run.sh --script scripts/with_errors.txt`:
 
 ```
 vfs: None
@@ -315,15 +320,8 @@ log: None
 script: scripts/with_errors.txt
 user@host:/$ # Стартовый скрипт с ошибкой: выполнение остановится на неизвестной команде.
 user@host:/$ ls 123 123
-ls: ['123', '123']
-user@host:/$ ls "123 123"
-ls: ['123 123']
-user@host:/$ ls -l 12 4 dv
-ls: ['-l', '12', '4', 'dv']
-user@host:/$ # Неизвестная команда: здесь скрипт остановится
-user@host:/$ cf
-cf: unknown command.
-Script error at line 7, execution stopped.
+ls: VFS is not loaded.
+Script error at line 3, execution stopped.
 ```
 
 Повреждённый лог, `./run.sh --log logs/broken.xml`:
