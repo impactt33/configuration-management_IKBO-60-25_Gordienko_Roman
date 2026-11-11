@@ -18,14 +18,16 @@ class HttpClient:
         self.client = httpx.Client(timeout=self.default_timeout, headers=self.headers)
 
     def get(self, url: str, **kwargs) -> Response:
-        with self.client as client:
-            try:
-                response = client.get(url=url, **kwargs)
-                response.raise_for_status()
-            except httpx.HTTPStatusError as err:
-                raise HttpError(
-                    status=err.response.status_code,
-                    url=str(err.request.url),
-                ) from err
+        try:
+            response = self.client.get(url=url, **kwargs)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as err:
+            raise HttpError(
+                status=err.response.status_code,
+                url=str(err.request.url),
+            ) from err
 
-            return response
+        return response
+
+    def close(self) -> None:
+        self.client.close()
