@@ -5,7 +5,7 @@ import threading
 import unittest
 from unittest.mock import Mock, call
 
-from hw2.main.data.dependencies_tree_builder import DependenciesTreeBuilder
+from hw2.main.domain.dependencies_tree_builder import DependenciesTreeBuilder
 from hw2.main.data.external_api.dependencies_collector import (
     DependenciesCollector,
 )
@@ -62,6 +62,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
         result = await self.builder(self.repo, "root", "1.0")
 
         self.assertEqual(result.package_name, "root")
+        self.assertEqual(result.version, "1.0")
         self.assertEqual(result.dependencies, [])
         self.collector.get_available_versions_of_package.assert_not_called()
 
@@ -141,6 +142,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
         result = await self.builder(self.repo, "root", "1.0")
 
         self.assertEqual(result.dependencies[0].package_name, "child")
+        self.assertEqual(result.dependencies[0].version, "2.10")
         self.assertEqual(
             self.collector.get_available_versions_of_package.call_args_list,
             [call(self.repo, "child")],
@@ -257,6 +259,30 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
         calls = self.collector.get_pypi_dependencies_for_package.call_args_list
         self.assertEqual(calls.count(call(self.repo, "d", "1.0")), 1)
 
+    async def test_cached_dependency_is_expanded_on_deeper_level(self):
+        """Повторная ветка раскрывается из кэша даже без новых запросов."""
+        self.graph = {
+            ("a", "1.0"): ["b", "d"],
+            ("b", "1.0"): ["c"],
+            ("c", "1.0"): ["d"],
+            ("d", "1.0"): ["e"],
+            ("e", "1.0"): [],
+        }
+        self.versions = {name: ["1.0"] for name in ("b", "c", "d", "e")}
+
+        result = await self.builder(self.repo, "a", "1.0")
+
+        direct_d = result.dependencies[1]
+        nested_d = result.dependencies[0].dependencies[0].dependencies[0]
+        self.assertIsNot(direct_d, nested_d)
+        for node in (direct_d, nested_d):
+            self.assertEqual(node.package_name, "d")
+            self.assertEqual(node.version, "1.0")
+            self.assertEqual(node.dependencies[0].package_name, "e")
+        calls = self.collector.get_pypi_dependencies_for_package.call_args_list
+        for name in ("d", "e"):
+            self.assertEqual(calls.count(call(self.repo, name, "1.0")), 1)
+
     async def test_version_lookup_error_is_returned(self):
         """Ошибка репозитория сохраняется вместо ошибки разбора версии."""
         error = ExceptionCause(status_code=503, cause="Repository unavailable")
@@ -332,6 +358,104 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(first.model_dump(), second.model_dump())
         self.assertEqual(second.dependencies[0].package_name, "child")
+
+    async def test_zero_depth_does_not_query_repository(self):
+        """При глубине 0 возвращается только корень, без запросов."""
+        result = await self.builder(
+            self.repo, "root", "1.0", max_depth=0,
+        )
+
+        self.assertEqual(result.as_adjacency_list(), {"root==1.0": []})
+        self.collector.get_pypi_dependencies_for_package.assert_not_called()
+        self.collector.get_available_versions_of_package.assert_not_called()
+
+    async def test_boundary_packages_are_not_loaded(self):
+        """Для граничного узла выбирается версия, но не его зависимости."""
+        self.graph[("a", "1.0")] = ["b"]
+        self.versions["b"] = ["1.0"]
+
+        result = await self.builder(self.repo, "a", "1.0", max_depth=1)
+
+        self.assertEqual(result.as_adjacency_list(), {
+            "a==1.0": ["b==1.0"], "b==1.0": [],
+        })
+        requests = self.collector.get_pypi_dependencies_for_package
+        requests.assert_called_once_with(self.repo, "a", "1.0")
+
+    async def test_depth_limit_applies_to_cached_nodes_in_each_branch(self):
+        """Кэш не раскрывает граничный узел глубже разрешённого уровня."""
+        self.graph = {
+            ("a", "1.0"): ["b", "d"],
+            ("b", "1.0"): ["c"],
+            ("c", "1.0"): ["d"],
+            ("d", "1.0"): ["e"],
+            ("e", "1.0"): [],
+        }
+        self.versions = {name: ["1.0"] for name in ("b", "c", "d", "e")}
+
+        result = await self.builder(self.repo, "a", "1.0", max_depth=3)
+
+        self.assertEqual(
+            result.dependencies[1].dependencies[0].package_name, "e",
+        )
+        boundary_d = result.dependencies[0].dependencies[0].dependencies[0]
+        self.assertEqual(boundary_d.package_name, "d")
+        self.assertEqual(boundary_d.dependencies, [])
+        self.assertEqual(result.as_adjacency_list()["d==1.0"], ["e==1.0"])
+
+    async def test_negative_depth_is_rejected(self):
+        """Ошибочная глубина не превращается в неограниченный обход."""
+        with self.assertRaises(ValueError):
+            await self.builder(self.repo, "a", "1.0", max_depth=-1)
+        self.collector.get_pypi_dependencies_for_package.assert_not_called()
+
+    async def test_filter_skips_version_and_metadata_requests(self):
+        """Фильтр применяется до любых запросов исключённого пакета."""
+        self.graph[("root", "1.0")] = ["Typing_Extensions>=4"]
+
+        result = await self.builder(
+            self.repo, "root", "1.0", exclude_substring="TYPING.",
+        )
+
+        self.assertEqual(result.dependencies, [])
+        self.collector.get_available_versions_of_package.assert_not_called()
+
+    async def test_shared_descendant_survives_filter_in_another_branch(self):
+        """Исключение b не исключает d, доступный через c."""
+        self.graph = {
+            ("a", "1.0"): ["b", "c"],
+            ("c", "1.0"): ["d"],
+            ("d", "1.0"): [],
+        }
+        self.versions = {name: ["1.0"] for name in ("c", "d")}
+
+        result = await self.builder(
+            self.repo, "a", "1.0", exclude_substring="B",
+        )
+
+        self.assertEqual(result.as_adjacency_list(), {
+            "a==1.0": ["c==1.0"],
+            "c==1.0": ["d==1.0"], "d==1.0": [],
+        })
+
+    async def test_matching_root_is_not_analyzed(self):
+        """Корень остаётся в выводе, но его совпадение останавливает анализ."""
+        result = await self.builder(
+            self.repo, "root", "1.0", exclude_substring="ROOT",
+        )
+
+        self.assertEqual(result.dependencies, [])
+        self.collector.get_pypi_dependencies_for_package.assert_not_called()
+
+    async def test_limits_and_filters_are_not_reused_between_calls(self):
+        """Каждый запуск одного построителя использует свои ограничения."""
+        self.graph = {("a", "1.0"): ["b"], ("b", "1.0"): []}
+        self.versions = {"b": ["1.0"]}
+
+        await self.builder(self.repo, "a", "1.0", exclude_substring="b")
+        result = await self.builder(self.repo, "a", "1.0", max_depth=1)
+
+        self.assertEqual(result.dependencies[0].package_name, "b")
 
 
 if __name__ == "__main__":

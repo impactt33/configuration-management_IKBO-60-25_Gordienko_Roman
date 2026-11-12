@@ -1,0 +1,34 @@
+{
+  "own_node_count": 7,
+  "pip_node_count": 7,
+  "own_edge_count": 8,
+  "pip_edge_count": 8,
+  "only_own_nodes": [],
+  "only_pip_nodes": [],
+  "only_own_edges": [],
+  "only_pip_edges": [],
+  "own_order": [
+    "certifi",
+    "h11",
+    "httpcore",
+    "idna",
+    "typing-extensions",
+    "anyio",
+    "httpx"
+  ],
+  "pip_order": [
+    "typing-extensions",
+    "idna",
+    "h11",
+    "certifi",
+    "httpcore",
+    "anyio",
+    "httpx"
+  ],
+  "identical_order": false,
+  "own_order_is_topological": true,
+  "pip_order_is_topological": true,
+  "package": "httpx==0.28.1",
+  "python": "3.14.8",
+  "timestamp": "2026-11-12T09:30:37.387077+00:00"
+}

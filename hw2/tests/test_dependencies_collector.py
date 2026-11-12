@@ -7,7 +7,7 @@ import httpx
 
 from hw2.core.exceptions import HttpError
 from hw2.core.http_client import HttpClient
-from hw2.main.data.dependencies_tree_builder import DependenciesTreeBuilder
+from hw2.main.domain.dependencies_tree_builder import DependenciesTreeBuilder
 from hw2.main.data.external_api.dependencies_collector import (
     DependenciesCollector,
 )
