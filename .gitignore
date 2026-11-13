@@ -1,2 +1,5 @@
 /.idea
 _sandbox/
+/hw2/.tools
+/hw2/.cache
+/hw2/output
