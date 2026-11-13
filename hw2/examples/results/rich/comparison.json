@@ -1,0 +1,28 @@
+{
+  "own_node_count": 4,
+  "pip_node_count": 4,
+  "own_edge_count": 3,
+  "pip_edge_count": 3,
+  "only_own_nodes": [],
+  "only_pip_nodes": [],
+  "only_own_edges": [],
+  "only_pip_edges": [],
+  "own_order": [
+    "mdurl",
+    "markdown-it-py",
+    "pygments",
+    "rich"
+  ],
+  "pip_order": [
+    "pygments",
+    "mdurl",
+    "markdown-it-py",
+    "rich"
+  ],
+  "identical_order": false,
+  "own_order_is_topological": true,
+  "pip_order_is_topological": true,
+  "package": "rich==13.9.4",
+  "python": "3.14.8",
+  "timestamp": "2026-11-12T09:37:17.610505+00:00"
+}

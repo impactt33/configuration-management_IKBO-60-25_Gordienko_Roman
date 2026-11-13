@@ -1,0 +1,11 @@
+{
+  "rich==13.9.4": [
+    "markdown-it-py==4.3.0",
+    "pygments==2.21.0"
+  ],
+  "markdown-it-py==4.3.0": [
+    "mdurl==0.1.2"
+  ],
+  "pygments==2.21.0": [],
+  "mdurl==0.1.2": []
+}

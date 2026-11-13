@@ -1,0 +1,20 @@
+direction: right
+
+n0: "httpx==0.28.1"
+n1: "anyio==4.16.0"
+n2: "certifi==2026.10.23"
+n3: "httpcore==1.0.9"
+n4: "idna==3.20"
+n5: "typing_extensions==4.16.0"
+n6: "h11==0.16.0"
+
+n0.style.fill: "#dbeafe"
+
+n0 -> n1
+n0 -> n2
+n0 -> n3
+n0 -> n4
+n1 -> n4
+n1 -> n5
+n3 -> n2
+n3 -> n6

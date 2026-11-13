@@ -103,3 +103,7 @@ $RECYCLE.BIN/
 !.env.example
 !.env.sample
 !.env.template
+
+/hw2/.tools
+/hw2/.cache
+/hw2/output
