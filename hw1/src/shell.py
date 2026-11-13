@@ -57,11 +57,15 @@ def parse_command(command: str) -> list[str]:
 class Shell:
     """Исполняет команды и хранит текущий каталог виртуальной системы."""
 
-    def __init__(self, vfs: VFS | None, logger: XmlLogger | None = None) -> None:
+    def __init__(
+        self, vfs: VFS | None, logger: XmlLogger | None = None,
+    ) -> None:
         """Начинает работу в корне загруженной VFS."""
         self.vfs = vfs
         self.logger = logger
-        self.current_directory = vfs.root_directory if vfs is not None else None
+        self.current_directory = (
+            vfs.root_directory if vfs is not None else None
+        )
 
     @property
     def current_path(self) -> str:
@@ -88,24 +92,37 @@ class Shell:
             else self.current_directory
         )
 
-        parts = pure_posix_path.parts[1:] if pure_posix_path.is_absolute() else pure_posix_path.parts
+        parts = (
+            pure_posix_path.parts[1:]
+            if pure_posix_path.is_absolute()
+            else pure_posix_path.parts
+        )
         for part in parts:
             if part == "..":
                 if directory.parent is not None:
                     directory = directory.parent
                 continue
 
-            child_directory = next(
-                (child for child in directory.directories if child.name == part),
-                None,
+            directory = self._find_child_directory(
+                directory, part, command, pure_posix_path,
             )
-            if child_directory is None:
-                if any(file.name == part for file in directory.files):
-                    raise CommandError(f"{command}: {pure_posix_path}: not a directory.")
-                raise CommandError(f"{command}: {pure_posix_path}: no such file or directory.")
-            directory = child_directory
 
         return directory
+
+    @staticmethod
+    def _find_child_directory(
+        directory: Directory, name: str, command: str, path: PurePosixPath,
+    ) -> Directory:
+        """Находит дочернюю папку или объясняет, почему путь недоступен."""
+        child_directory = next(
+            (child for child in directory.directories if child.name == name),
+            None,
+        )
+        if child_directory is not None:
+            return child_directory
+        if any(file.name == name for file in directory.files):
+            raise CommandError(f"{command}: {path}: not a directory.")
+        raise CommandError(f"{command}: {path}: no such file or directory.")
 
     def cmd_ls(self, args: list[str]) -> str:
         """Выводит содержимое текущего или указанного каталога VFS."""

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as element_tree
 from dataclasses import dataclass
 from pathlib import Path
 from random import paretovariate
@@ -39,7 +39,9 @@ class File:
     content: str | bytes
 
 
-def read_directory(element: ET.Element, parent: Directory | None = None) -> Directory:
+def read_directory(
+    element: element_tree.Element, parent: Directory | None = None,
+) -> Directory:
     """Рекурсивно преобразует XML-папку в дерево объектов."""
 
     curr_directory = Directory(
@@ -51,7 +53,9 @@ def read_directory(element: ET.Element, parent: Directory | None = None) -> Dire
 
     for child in element:
         if child.tag == "directory":
-            curr_directory.directories.append(read_directory(child, curr_directory))
+            curr_directory.directories.append(
+                read_directory(child, curr_directory)
+            )
         elif child.tag == "file":
             name = child.attrib["name"]
             encoding = child.attrib["encoding"]
@@ -78,7 +82,7 @@ def get_vfs(path: str) -> VFS:
     if not abs_path.exists():
         raise VfsNotFound(path)
 
-    tree = ET.parse(abs_path)
+    tree = element_tree.parse(abs_path)
     root_tag = tree.getroot()
     root_dir = root_tag.find("directory")
 

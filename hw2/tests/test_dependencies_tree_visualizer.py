@@ -46,7 +46,7 @@ class TestDependenciesTreeVisualizer(unittest.TestCase):
 class TestD2Renderer(unittest.TestCase):
     """Сбой внешнего инструмента не должен выглядеть как успешный рендер."""
 
-    def setUp(self):
+    def prepare_renderer(self):
         """Хранит все временные артефакты внутри hw2/tests."""
         directory = TemporaryDirectory(dir=Path(__file__).parent)
         self.addCleanup(directory.cleanup)
@@ -55,6 +55,8 @@ class TestD2Renderer(unittest.TestCase):
 
     def test_source_is_saved_and_renderer_receives_paths_without_shell(self):
         """Путь с пробелами остаётся одним аргументом процесса."""
+        self.prepare_renderer()
+
         def render(command, **kwargs):
             Path(command[-1]).write_text("<svg/>", encoding="utf-8")
             self.assertNotIn("shell", kwargs)
@@ -67,6 +69,7 @@ class TestD2Renderer(unittest.TestCase):
 
     def test_nonzero_exit_timeout_and_missing_output_are_errors(self):
         """Неуспешные запуски дают доменную ошибку визуализации."""
+        self.prepare_renderer()
         cases = [
             subprocess.CompletedProcess([], 1, "", "bad syntax"),
             subprocess.CompletedProcess([], 0, "", ""),
@@ -82,6 +85,7 @@ class TestD2Renderer(unittest.TestCase):
 
     def test_show_uses_local_file_uri(self):
         """Открытие изображения требует явного вызова show."""
+        self.prepare_renderer()
         browser = "hw2.core.d2_renderer.webbrowser.open"
         with patch(browser, return_value=True) as op:
             self.renderer.show(self.output)
@@ -89,6 +93,7 @@ class TestD2Renderer(unittest.TestCase):
 
     def test_previous_svg_is_preserved_when_new_output_is_missing(self):
         """Старый SVG не выдаётся за результат неудачной компиляции."""
+        self.prepare_renderer()
         self.output.write_text("old SVG", encoding="utf-8")
         completed = subprocess.CompletedProcess([], 0, "", "")
         with patch("hw2.core.d2_renderer.subprocess.run",

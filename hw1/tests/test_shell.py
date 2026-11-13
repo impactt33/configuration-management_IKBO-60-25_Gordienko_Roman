@@ -61,36 +61,42 @@ class TestParseCommand(unittest.TestCase):
 class TestExecute(unittest.TestCase):
     """Тесты выполнения команд."""
 
-    def setUp(self):
+    def create_shell(self):
         """Создаёт шелл без загруженной VFS."""
         self.shell = Shell(None)
 
     def test_ls_without_vfs(self):
         """Команда ls требует загруженную VFS."""
+        self.create_shell()
         with self.assertRaisesRegex(CommandError, "VFS is not loaded"):
             self.shell.execute("ls -l /home")
 
     def test_unknown_command(self):
         """Неизвестная команда бросает UnknownCommand."""
+        self.create_shell()
         with self.assertRaises(UnknownCommand):
             self.shell.execute("ld -l /home")
 
     def test_empty_line(self):
         """Пустой ввод ничего не выводит."""
+        self.create_shell()
         self.assertEqual(self.shell.execute(""), "")
 
     def test_unclosed_quote(self):
         """Ошибка парсера пробрасывается из execute наружу."""
+        self.create_shell()
         with self.assertRaises(UnclosedQuote):
             self.shell.execute('ld -l "/home')
 
     def test_exit_with_parameters(self):
         """Команда exit с аргументами бросает TooManyArguments."""
+        self.create_shell()
         with self.assertRaises(TooManyArguments):
             self.shell.execute("exit 5")
 
     def test_exit(self):
         """Команда exit бросает ExitRequest."""
+        self.create_shell()
         with self.assertRaises(ExitRequest):
             self.shell.execute("exit")
 
@@ -98,35 +104,40 @@ class TestExecute(unittest.TestCase):
 class TestLs(unittest.TestCase):
     """Вывод содержимого текущей и указанной папки VFS."""
 
-    def setUp(self):
+    def create_shell(self):
         """Загружает VFS с файлами и вложенными папками."""
         path = Path(__file__).resolve().parent.parent / "vfs" / "deep.xml"
         self.shell = Shell(get_vfs(str(path)))
 
     def test_current_directory(self):
         """Без аргументов ls выводит содержимое текущей папки."""
+        self.create_shell()
         self.assertEqual(self.shell.execute("ls"), "home welcome.txt")
 
     def test_long_current_directory(self):
         """ls -l без пути выводит элементы текущей папки по строкам."""
+        self.create_shell()
         self.assertEqual(self.shell.execute("ls -l"), "home\nwelcome.txt")
         self.shell.execute("cd /home/student")
         self.assertEqual(self.shell.execute("ls -l"), "project\nnotes.txt")
 
     def test_long_named_directory(self):
         """Путь работает вместе с флагом -l в обоих порядках."""
+        self.create_shell()
         expected = "project\nnotes.txt"
         self.assertEqual(self.shell.execute("ls -l /home/student"), expected)
         self.assertEqual(self.shell.execute("ls /home/student -l"), expected)
 
     def test_named_directory_without_flag(self):
         """Без флага имена разделяются пробелами."""
+        self.create_shell()
         self.assertEqual(
             self.shell.execute("ls /home/student"), "project notes.txt"
         )
 
     def test_argument_errors(self):
         """Лишние пути и отсутствующая папка вызывают ошибки."""
+        self.create_shell()
         with self.assertRaises(TooManyArguments):
             self.shell.execute("ls /home /home/student")
         with self.assertRaisesRegex(CommandError, "no such file"):
@@ -136,13 +147,14 @@ class TestLs(unittest.TestCase):
 class TestCd(unittest.TestCase):
     """Переходы внутри VFS и сохранение состояния при ошибках."""
 
-    def setUp(self):
-        """Загружает VFS с вложенными каталогами перед каждым тестом."""
+    def create_shell(self):
+        """Загружает VFS с вложенными каталогами для проверки переходов."""
         path = Path(__file__).resolve().parent.parent / "vfs" / "deep.xml"
         self.shell = Shell(get_vfs(str(path)))
 
     def test_absolute_and_relative_paths(self):
         """Абсолютные и относительные пути меняют текущий каталог."""
+        self.create_shell()
         self.assertEqual(self.shell.current_path, "/")
         self.assertEqual(self.shell.execute("cd /home/student"), "")
         self.assertEqual(self.shell.current_path, "/home/student")
@@ -151,25 +163,31 @@ class TestCd(unittest.TestCase):
 
     def test_parent_and_current_directory(self):
         """Точки в пути обозначают текущий и родительский каталоги."""
+        self.create_shell()
         self.shell.execute("cd /home/student/project/src")
         self.shell.execute("cd ./../docs/.")
         self.assertEqual(self.shell.current_path, "/home/student/project/docs")
 
     def test_root_and_repeated_separators(self):
         """Повторные разделители пути и переход в корень поддерживаются."""
+        self.create_shell()
         self.shell.execute("cd //home///student/")
         self.assertEqual(self.shell.current_path, "/home/student")
         self.shell.execute("cd /")
-        self.assertIs(self.shell.current_directory, self.shell.vfs.root_directory)
+        self.assertIs(
+            self.shell.current_directory, self.shell.vfs.root_directory
+        )
 
     def test_cannot_move_above_root(self):
         """Переход выше корня оставляет пользователя в корневом каталоге."""
+        self.create_shell()
         self.shell.execute("cd /home")
         self.shell.execute("cd ../../../../")
         self.assertEqual(self.shell.current_path, "/")
 
     def test_quoted_directory_name(self):
         """Имя каталога с пробелом передаётся в кавычках."""
+        self.create_shell()
         root = self.shell.vfs.root_directory
         root.directories.append(Directory("My Documents", root, [], []))
         self.shell.execute('cd "/My Documents"')
@@ -177,6 +195,7 @@ class TestCd(unittest.TestCase):
 
     def test_missing_directory_keeps_original_location(self):
         """Несуществующий путь не меняет текущий каталог."""
+        self.create_shell()
         self.shell.execute("cd /home")
         original = self.shell.current_directory
         with self.assertRaisesRegex(CommandError, "no such file or directory"):
@@ -185,6 +204,7 @@ class TestCd(unittest.TestCase):
 
     def test_file_in_path_is_rejected(self):
         """Переход в файл или через файл вызывает ошибку."""
+        self.create_shell()
         for path in ("/welcome.txt", "/home/student/notes.txt/.."):
             with self.subTest(path=path):
                 with self.assertRaisesRegex(CommandError, "not a directory"):
@@ -193,6 +213,7 @@ class TestCd(unittest.TestCase):
 
     def test_argument_errors(self):
         """Отсутствующий, пустой путь и лишние аргументы вызывают ошибки."""
+        self.create_shell()
         with self.assertRaises(MissingArguments):
             self.shell.execute("cd")
         with self.assertRaises(TooManyArguments):
@@ -242,8 +263,8 @@ class FakeLogger:
 class TestExecuteLogging(unittest.TestCase):
     """Тесты записи вызовов команд в лог."""
 
-    def setUp(self):
-        """Создаёт подменный логгер перед каждым тестом."""
+    def create_shell(self):
+        """Создаёт шелл с подменным логгером для проверки событий."""
         self.logger = FakeLogger()
         root = Directory("/", None, [], [])
         root.directories.append(Directory("My Documents", root, [], []))
@@ -251,34 +272,40 @@ class TestExecuteLogging(unittest.TestCase):
 
     def test_command_is_logged(self):
         """Вызов команды записывается с именем и аргументами."""
+        self.create_shell()
         self.shell.execute('cd "My Documents"')
         self.assertEqual(self.logger.events, [("cd", ["My Documents"])])
 
     def test_unknown_command_is_logged(self):
         """Попытка вызвать неизвестную команду тоже записывается."""
+        self.create_shell()
         with self.assertRaises(UnknownCommand):
             self.shell.execute("foo bar")
         self.assertEqual(self.logger.events, [("foo", ["bar"])])
 
     def test_exit_is_logged(self):
         """Команда exit записывается до выхода."""
+        self.create_shell()
         with self.assertRaises(ExitRequest):
             self.shell.execute("exit")
         self.assertEqual(self.logger.events, [("exit", [])])
 
     def test_empty_line_is_not_logged(self):
         """Пустая строка и комментарий не записываются."""
+        self.create_shell()
         self.shell.execute("   # comment")
         self.assertEqual(self.logger.events, [])
 
     def test_parse_error_is_not_logged(self):
         """Строка с ошибкой разбора не записывается."""
+        self.create_shell()
         with self.assertRaises(UnclosedQuote):
             self.shell.execute('ls "abc')
         self.assertEqual(self.logger.events, [])
 
     def test_failed_cd_is_logged(self):
         """Неудачная попытка сменить каталог тоже записывается в лог."""
+        self.create_shell()
         with self.assertRaises(CommandError):
             self.shell.execute("cd /missing")
         self.assertEqual(self.logger.events, [("cd", ["/missing"])])

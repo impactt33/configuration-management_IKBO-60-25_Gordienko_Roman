@@ -14,10 +14,7 @@ class DependenciesLoadOrder:
         """Возвращает каждый пакет один раз; циклы отклоняются явно."""
         graph = root.as_adjacency_list()
         remaining = {name: len(children) for name, children in graph.items()}
-        dependents: dict[str, list[str]] = defaultdict(list)
-        for parent, children in graph.items():
-            for child in children:
-                dependents[child].append(parent)
+        dependents = self._build_dependents(graph)
         ready = [name for name, count in remaining.items() if count == 0]
         heapify(ready)
         order = []
@@ -36,3 +33,14 @@ class DependenciesLoadOrder:
                 "Не упорядочены: " + ", ".join(unresolved)
             )
         return order
+
+    @staticmethod
+    def _build_dependents(
+        graph: dict[str, list[str]],
+    ) -> dict[str, list[str]]:
+        """Сопоставляет пакету всех родителей, ожидающих его загрузки."""
+        dependents: dict[str, list[str]] = defaultdict(list)
+        for parent, children in graph.items():
+            for child in children:
+                dependents[child].append(parent)
+        return dependents

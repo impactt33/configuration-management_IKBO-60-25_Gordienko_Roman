@@ -2,7 +2,7 @@
 
 import tempfile
 import unittest
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as element_tree
 from pathlib import Path
 
 from errors import InvalidVfs, VfsNotFound
@@ -64,7 +64,7 @@ class TestVfsReader(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "broken.xml"
             path.write_text("<vfs><directory>", encoding="utf-8")
-            with self.assertRaises(ET.ParseError):
+            with self.assertRaises(element_tree.ParseError):
                 get_vfs(str(path))
 
     def test_missing_root_directory(self):

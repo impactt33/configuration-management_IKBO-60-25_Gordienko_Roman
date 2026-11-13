@@ -33,7 +33,8 @@ class ShellWindow:
         self.root.title(f"Shell emulator - VFS: {vfs_name}")
         self.root.geometry(WINDOW_SIZE)
         self.prompt = (
-            f"{getpass.getuser()}@{socket.gethostname()}:{self.shell.current_path}$ "
+            f"{getpass.getuser()}@{socket.gethostname()}:"
+            f"{self.shell.current_path}$ "
         )
         self.output = self._build_output()
         self.entry = self._build_input()
@@ -94,7 +95,8 @@ class ShellWindow:
     def update_prompt(self) -> None:
         """Обновляет видимое приглашение по текущему пути шелла."""
         self.prompt = (
-            f"{getpass.getuser()}@{socket.gethostname()}:{self.shell.current_path}$ "
+            f"{getpass.getuser()}@{socket.gethostname()}:"
+            f"{self.shell.current_path}$ "
         )
         self.prompt_label.config(text=self.prompt)
 

@@ -7,7 +7,10 @@ from hw2.core.exceptions import HttpError
 
 
 class HttpClient:
-    def __init__(self, headers: dict[str, Any] | None = None, default_timeout: float= 10.0) -> None:
+    def __init__(
+        self, headers: dict[str, Any] | None = None,
+        default_timeout: float = 10.0,
+    ) -> None:
         self.default_timeout = default_timeout
 
         if headers is None:
@@ -15,7 +18,9 @@ class HttpClient:
         else:
             self.headers = headers
 
-        self.client = httpx.Client(timeout=self.default_timeout, headers=self.headers)
+        self.client = httpx.Client(
+            timeout=self.default_timeout, headers=self.headers,
+        )
 
     def get(self, url: str, **kwargs) -> Response:
         try:

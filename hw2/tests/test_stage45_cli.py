@@ -7,7 +7,7 @@ import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
-from xml.etree import ElementTree
+from xml.etree import ElementTree as element_tree
 
 
 HW2 = Path(__file__).resolve().parents[1]
@@ -17,7 +17,7 @@ D2_AVAILABLE = (HW2 / ".tools" / "d2").is_file() or which("d2")
 class TestStage45CLI(unittest.TestCase):
     """Не использует сеть и не открывает настоящий браузер при проверках."""
 
-    def setUp(self):
+    def prepare_output(self):
         """Создаёт выходной каталог только внутри hw2."""
         directory = TemporaryDirectory(dir=HW2 / "tests")
         self.addCleanup(directory.cleanup)
@@ -35,6 +35,7 @@ class TestStage45CLI(unittest.TestCase):
 
     def test_load_order_includes_root_last_and_respects_filter(self):
         """Режим порядка использует ограничения того же BFS."""
+        self.prepare_output()
         result = self.run_cli("--format", "order", "--filter", "b")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(
@@ -43,6 +44,7 @@ class TestStage45CLI(unittest.TestCase):
 
     def test_load_order_cycle_has_error_and_no_partial_order(self):
         """Частичный результат не выдаётся как корректный порядок."""
+        self.prepare_output()
         result = self.run_cli("--format", "order", repository="cycle")
         self.assertEqual(result.returncode, 1)
         self.assertEqual(result.stdout, "")
@@ -51,6 +53,7 @@ class TestStage45CLI(unittest.TestCase):
 
     def test_d2_is_written_without_requiring_renderer(self):
         """Для текстового D2 внешний бинарник не нужен."""
+        self.prepare_output()
         path = self.output / "graph with spaces.d2"
         result = self.run_cli(
             "--format", "d2", "--output", str(path),
@@ -63,18 +66,20 @@ class TestStage45CLI(unittest.TestCase):
     @unittest.skipUnless(D2_AVAILABLE, "D2 не установлен")
     def test_svg_is_rendered_from_real_d2_including_cycle(self):
         """Настоящий D2 компилирует цикл в корректный SVG-документ."""
+        self.prepare_output()
         path = self.output / "cycle with spaces.svg"
         result = self.run_cli(
             "--format", "d2", "--output", str(path), repository="cycle",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(path.with_suffix(".d2").read_text(), result.stdout)
-        svg = ElementTree.parse(path).getroot()
+        svg = element_tree.parse(path).getroot()
         self.assertEqual(svg.tag, "{http://www.w3.org/2000/svg}svg")
         self.assertIn("A==1.0", path.read_text())
 
     def test_missing_renderer_is_an_error_without_traceback(self):
         """Отсутствующий D2 не маскируется сохранением одного текста."""
+        self.prepare_output()
         result = self.run_cli(
             "--format", "d2", "--output", str(self.output / "graph.svg"),
             env={"D2_BINARY": "/missing/d2"},
@@ -85,6 +90,7 @@ class TestStage45CLI(unittest.TestCase):
 
     def test_invalid_output_options_are_rejected_before_analysis(self):
         """Нельзя открывать не-SVG или перезаписывать входной репозиторий."""
+        self.prepare_output()
         for options in (
             ["--show"], ["--format", "unknown"],
             ["--output", str(self.output / "graph.svg")],
@@ -97,6 +103,7 @@ class TestStage45CLI(unittest.TestCase):
 
     def test_stage4_demonstration_script(self):
         """Примеры включают ветвление, общий узел, лист и цикл."""
+        self.prepare_output()
         result = subprocess.run(
             ["bash", str(HW2 / "examples" / "run_stage4.sh")],
             env=dict(os.environ, PYTHON=sys.executable),

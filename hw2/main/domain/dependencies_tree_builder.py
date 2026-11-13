@@ -12,20 +12,20 @@ from hw2.main.domain.entities.exception_cause import ExceptionCause
 from hw2.main.domain.exceptions import VersionNotFoundError
 
 
-_DependencyKey = tuple[str, Version, frozenset[str]]
-_ResolvedDependency = tuple[Requirement, str]
+DependencyKey = tuple[str, Version, frozenset[str]]
+ResolvedDependency = tuple[Requirement, str]
 
 
 @dataclass(frozen=True)
-class _QueueItem:
+class QueueItem:
     """Хранит пакет, его место в дереве и путь до него."""
 
     requirement: Requirement
     node: Dependency
-    path: frozenset[_DependencyKey] = frozenset()
+    path: frozenset[DependencyKey] = frozenset()
 
     @property
-    def key(self) -> _DependencyKey:
+    def key(self) -> DependencyKey:
         """Различает версии и extras с учётом нормализации имён."""
         return (
             canonicalize_name(self.requirement.name),
@@ -62,34 +62,47 @@ class DependenciesTreeBuilder:
         )
         if self._is_excluded(requirement.name, exclude_substring):
             return root
-        queue = deque([_QueueItem(requirement=requirement, node=root)])
-        cache: dict[_DependencyKey, list[_ResolvedDependency]] = {}
+        queue = deque([QueueItem(requirement=requirement, node=root)])
+        cache: dict[DependencyKey, list[ResolvedDependency]] = {}
         limit = asyncio.Semaphore(self.max_concurrency)
         depth = 0
 
         while queue and (max_depth is None or depth < max_depth):
-            level = [queue.popleft() for _ in range(len(queue))]
-            pending = {
-                item.key: item for item in level if item.key not in cache
-            }
-            if pending:
-                loaded = await self._load_level(
-                    repo_url, pending, limit, exclude_substring,
-                )
-                if isinstance(loaded, ExceptionCause):
-                    return loaded
-                cache.update(loaded)
-
-            for item in level:
-                self._enqueue_dependencies(item, cache[item.key], queue)
+            error = await self._expand_level(
+                repo_url, queue, cache, limit, exclude_substring,
+            )
+            if error is not None:
+                return error
             depth += 1
 
         return root
 
-    async def _load_level(
-        self, repo_url: str, pending: dict[_DependencyKey, _QueueItem],
+    async def _expand_level(
+        self, repo_url: str, queue: deque[QueueItem],
+        cache: dict[DependencyKey, list[ResolvedDependency]],
         limit: asyncio.Semaphore, exclude_substring: str,
-    ) -> dict[_DependencyKey, list[_ResolvedDependency]] | ExceptionCause:
+    ) -> ExceptionCause | None:
+        """Загружает текущий уровень и формирует очередь следующего."""
+        level = [queue.popleft() for _ in range(len(queue))]
+        pending = {
+            item.key: item for item in level if item.key not in cache
+        }
+        if pending:
+            loaded = await self._load_level(
+                repo_url, pending, limit, exclude_substring,
+            )
+            if isinstance(loaded, ExceptionCause):
+                return loaded
+            cache.update(loaded)
+
+        for item in level:
+            self._enqueue_dependencies(item, cache[item.key], queue)
+        return None
+
+    async def _load_level(
+        self, repo_url: str, pending: dict[DependencyKey, QueueItem],
+        limit: asyncio.Semaphore, exclude_substring: str,
+    ) -> dict[DependencyKey, list[ResolvedDependency]] | ExceptionCause:
         """Ожидает завершения всего уровня, включая задачи с ошибками."""
         results = await asyncio.gather(
             *(
@@ -110,9 +123,9 @@ class DependenciesTreeBuilder:
         return loaded
 
     async def _load_dependencies(
-        self, repo_url: str, item: _QueueItem, limit: asyncio.Semaphore,
+        self, repo_url: str, item: QueueItem, limit: asyncio.Semaphore,
         exclude_substring: str,
-    ) -> list[_ResolvedDependency] | ExceptionCause:
+    ) -> list[ResolvedDependency] | ExceptionCause:
         """Получает прямые зависимости в пределах лимита параллелизма."""
         async with limit:
             dependency_names = await asyncio.to_thread(
@@ -139,8 +152,8 @@ class DependenciesTreeBuilder:
 
     @staticmethod
     def _enqueue_dependencies(
-        item: _QueueItem, dependencies: list[_ResolvedDependency],
-        queue: deque[_QueueItem],
+        item: QueueItem, dependencies: list[ResolvedDependency],
+        queue: deque[QueueItem],
     ) -> None:
         """Сохраняет связи и ставит следующий уровень в очередь."""
         path = item.path | {item.key}
@@ -150,7 +163,7 @@ class DependenciesTreeBuilder:
                 dependencies=[],
             )
             item.node.dependencies.append(node)
-            child = _QueueItem(
+            child = QueueItem(
                 requirement=requirement, node=node, path=path,
             )
             if child.key not in path:

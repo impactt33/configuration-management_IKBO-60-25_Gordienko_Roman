@@ -13,7 +13,7 @@ from hw2.main.domain.entities.exception_cause import ExceptionCause
 from hw2.main.domain.exceptions import VersionNotFoundError
 
 
-class _ConcurrencyProbe:
+class ConcurrencyProbe:
     """Измеряет пересечение запросов двух одновременно работающих потоков."""
 
     def __init__(self, graph):
@@ -41,7 +41,7 @@ class _ConcurrencyProbe:
 class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
     """Проверяет выбор версий, условия, циклы и передачу ошибок."""
 
-    def setUp(self):
+    def prepare_builder(self):
         """Подменяет сетевой сборщик строгими ответами из словарей."""
         self.repo = "example.invalid/simple"
         self.graph = {}
@@ -57,6 +57,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_leaf(self):
         """Пакет без зависимостей не требует выбора дочерних версий."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = []
 
         result = await self.builder(self.repo, "root", "1.0")
@@ -68,6 +69,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_packages_are_loaded_in_breadth_first_order(self):
         """Следующий уровень запрашивается после всех родителей уровня."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b", "c"],
             ("b", "1.0"): ["d"],
@@ -95,10 +97,11 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_level_requests_overlap_with_concurrency_limit(self):
         """Запросы уровня пересекаются и соблюдают заданный лимит."""
+        self.prepare_builder()
         self.graph = {("root", "1.0"): ["b", "c", "d", "e"]}
         self.graph.update({(name, "1.0"): [] for name in ("b", "c", "d", "e")})
         self.versions = {name: ["1.0"] for name in ("b", "c", "d", "e")}
-        probe = _ConcurrencyProbe(self.graph)
+        probe = ConcurrencyProbe(self.graph)
         self.collector.get_pypi_dependencies_for_package.side_effect = probe
         builder = DependenciesTreeBuilder(self.collector, max_concurrency=2)
 
@@ -110,6 +113,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_deep_chain_does_not_require_recursion(self):
         """Обход цепочки длиннее лимита рекурсии остаётся итеративным."""
+        self.prepare_builder()
         length = 1100
         self.graph = {
             (f"pkg{i}", "1.0"): [f"pkg{i + 1}"] for i in range(length)
@@ -130,11 +134,13 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     def test_concurrency_limit_must_be_positive(self):
         """Нулевой лимит отклоняется вместо зависания на семафоре."""
+        self.prepare_builder()
         with self.assertRaises(ValueError):
             DependenciesTreeBuilder(self.collector, max_concurrency=0)
 
     async def test_requirement_uses_child_name_and_matching_version(self):
         """Требование разбирается, а версии сравниваются численно."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = ["child>=2,<3"]
         self.graph[("child", "2.10")] = []
         self.versions["child"] = ["1.0", "2.9", "2.10", "3.0"]
@@ -157,6 +163,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_false_environment_marker_skips_all_child_requests(self):
         """Неприменимая зависимость исключается до запросов к сборщику."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = [
             'child; python_version < "0"',
         ]
@@ -168,6 +175,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_unselected_extra_is_skipped(self):
         """Дополнительная возможность не включается автоматически."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = ['tls; extra == "security"']
 
         result = await self.builder(self.repo, "root", "1.0")
@@ -177,6 +185,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_child_extras_are_propagated(self):
         """Выбранные extras относятся к зависимостям дочернего пакета."""
+        self.prepare_builder()
         self.graph = {
             ("root", "1.0"): ["child[security]>=1"],
             ("child", "1.0"): [
@@ -197,6 +206,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_cycle_keeps_back_edge_without_reloading_root(self):
         """Цикл сохраняется листом, включая эквивалентные версии 1.0 и 1.0.0."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b"],
             ("b", "1.0"): ["a"],
@@ -215,6 +225,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_cycle_with_new_extra_loads_extra_dependencies(self):
         """Повторный пакет с новым extra не теряет дополнительные связи."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b", 'tls; extra == "security"'],
             ("b", "1.0"): ["a[security]"],
@@ -234,6 +245,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_shared_dependency_remains_in_both_branches(self):
         """Общая зависимость не исчезает из второй ветки дерева."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b", "c"],
             ("b", "1.0"): ["d"],
@@ -261,6 +273,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_cached_dependency_is_expanded_on_deeper_level(self):
         """Повторная ветка раскрывается из кэша даже без новых запросов."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b", "d"],
             ("b", "1.0"): ["c"],
@@ -285,6 +298,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_version_lookup_error_is_returned(self):
         """Ошибка репозитория сохраняется вместо ошибки разбора версии."""
+        self.prepare_builder()
         error = ExceptionCause(status_code=503, cause="Repository unavailable")
         self.graph[("root", "1.0")] = ["child"]
         self.versions["child"] = error
@@ -298,6 +312,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_child_metadata_error_is_returned(self):
         """Ошибка получения дочерних метаданных передаётся вызывающему коду."""
+        self.prepare_builder()
         error = ExceptionCause(status_code=404, cause="Metadata not found")
         self.graph = {
             ("root", "1.0"): ["child"],
@@ -311,6 +326,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_level_finishes_before_propagating_an_exception(self):
         """Ошибка не оставляет соседний запрос работать после возврата."""
+        self.prepare_builder()
         self.graph = {
             ("root", "1.0"): ["b", "c"], ("c", "1.0"): [],
         }
@@ -341,6 +357,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_no_matching_version_raises_version_error(self):
         """Отсутствие подходящего релиза даёт ошибку с именем зависимости."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = ["child>=2,<3"]
         self.versions["child"] = ["1.0", "3.0"]
 
@@ -349,6 +366,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_separate_calls_do_not_share_traversal_state(self):
         """Один построитель допускает повторное построение того же дерева."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = ["child"]
         self.graph[("child", "1.0")] = []
         self.versions["child"] = ["1.0"]
@@ -361,6 +379,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_zero_depth_does_not_query_repository(self):
         """При глубине 0 возвращается только корень, без запросов."""
+        self.prepare_builder()
         result = await self.builder(
             self.repo, "root", "1.0", max_depth=0,
         )
@@ -371,6 +390,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_boundary_packages_are_not_loaded(self):
         """Для граничного узла выбирается версия, но не его зависимости."""
+        self.prepare_builder()
         self.graph[("a", "1.0")] = ["b"]
         self.versions["b"] = ["1.0"]
 
@@ -384,6 +404,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_depth_limit_applies_to_cached_nodes_in_each_branch(self):
         """Кэш не раскрывает граничный узел глубже разрешённого уровня."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b", "d"],
             ("b", "1.0"): ["c"],
@@ -405,12 +426,14 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_negative_depth_is_rejected(self):
         """Ошибочная глубина не превращается в неограниченный обход."""
+        self.prepare_builder()
         with self.assertRaises(ValueError):
             await self.builder(self.repo, "a", "1.0", max_depth=-1)
         self.collector.get_pypi_dependencies_for_package.assert_not_called()
 
     async def test_filter_skips_version_and_metadata_requests(self):
         """Фильтр применяется до любых запросов исключённого пакета."""
+        self.prepare_builder()
         self.graph[("root", "1.0")] = ["Typing_Extensions>=4"]
 
         result = await self.builder(
@@ -422,6 +445,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_shared_descendant_survives_filter_in_another_branch(self):
         """Исключение b не исключает d, доступный через c."""
+        self.prepare_builder()
         self.graph = {
             ("a", "1.0"): ["b", "c"],
             ("c", "1.0"): ["d"],
@@ -440,6 +464,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_matching_root_is_not_analyzed(self):
         """Корень остаётся в выводе, но его совпадение останавливает анализ."""
+        self.prepare_builder()
         result = await self.builder(
             self.repo, "root", "1.0", exclude_substring="ROOT",
         )
@@ -449,6 +474,7 @@ class TestDependenciesTreeBuilder(unittest.IsolatedAsyncioTestCase):
 
     async def test_limits_and_filters_are_not_reused_between_calls(self):
         """Каждый запуск одного построителя использует свои ограничения."""
+        self.prepare_builder()
         self.graph = {("a", "1.0"): ["b"], ("b", "1.0"): []}
         self.versions = {"b": ["1.0"]}
 

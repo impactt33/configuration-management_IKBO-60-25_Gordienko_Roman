@@ -1,7 +1,7 @@
 """Точка входа: разбирает параметры и запускает окно эмулятора."""
 
 import argparse
-import xml.etree.ElementTree as ET
+import xml.etree.ElementTree as element_tree
 
 from errors import InvalidVfs, VfsNotFound
 from gui import ShellWindow
@@ -31,7 +31,7 @@ def main() -> None:
     vfs_error = None
     try:
         vfs = get_vfs(args.vfs) if args.vfs else None
-    except (VfsNotFound, InvalidVfs, OSError, ET.ParseError) as exc:
+    except (VfsNotFound, InvalidVfs, OSError, element_tree.ParseError) as exc:
         vfs_error = f"VFS error: cannot load {args.vfs}: {exc}"
 
     logger = None
@@ -39,7 +39,7 @@ def main() -> None:
     if args.log:
         try:
             logger = XmlLogger(args.log)
-        except (OSError, ET.ParseError) as exc:
+        except (OSError, element_tree.ParseError) as exc:
             log_error = f"Log error: cannot use {args.log}: {exc}"
     shell_window = ShellWindow(vfs, logger)
     for name, value in vars(args).items():
